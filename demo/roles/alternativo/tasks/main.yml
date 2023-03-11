@@ -1,0 +1,11 @@
+---
+# tasks file for alternativo
+- name: Mostrar mensaje por pantalla
+  debug:
+    msg: "Se ha aplicado un rol alternativo"
+
+- name: Instalar MariaDB
+  become: true
+  apt:
+    name: mariadb-server
+    state: present

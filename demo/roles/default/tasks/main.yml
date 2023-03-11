@@ -1,0 +1,6 @@
+---
+# tasks file for defecto
+- name: Mostrar mensaje por pantalla
+  debug:
+    msg: |
+      "Se ha aplicado un rol por defecto"
