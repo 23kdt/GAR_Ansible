@@ -1,0 +1,29 @@
+---
+
+- hosts: all
+  become: true
+  pre_tasks:
+
+  - name: install updates (Ubuntu)
+    apt:
+      update_cache: yes
+    when: ansible_distribution == "Ubuntu"
+
+
+- hosts: subred1
+  become: true
+  tasks:
+
+  - name: install kubernetes y docker
+    apt:
+      name:
+        - kubernetes
+        - docker
+      state: latest
+    when: ansible_distribution == "Ubuntu"
+
+
+- hosts: subred2
+  tasks:
+   - name: hacer ping
+     ping:

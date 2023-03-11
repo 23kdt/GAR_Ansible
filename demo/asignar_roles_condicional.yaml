@@ -1,0 +1,13 @@
+---
+- name: Asignar rol por defecto a todos los hosts                          
+  hosts: all
+  tasks:
+    - name: Aplicar rol por defecto
+      include_role:
+        name: default
+      when: "'subred1' not in group_names"
+
+- name: Aplicar rol alternativo a subgrupo
+  hosts: subred2
+  roles:
+    - alternativo

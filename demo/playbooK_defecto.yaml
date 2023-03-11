@@ -1,0 +1,6 @@
+---
+- name: Aplicar role por defecto a un nodo
+  hosts: all
+  become: true
+  roles:
+    - default

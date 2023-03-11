@@ -1,0 +1,10 @@
+---
+
+- hosts: all
+  become: true
+  tasks:
+
+  - name: uninstall kubernetes package
+    apt:
+      name: kubernetes
+      state: absent

@@ -1,0 +1,12 @@
+---
+- name: Aplicar roles a los hosts
+  hosts: all
+  become: true
+  roles:
+    - default
+
+- name: Aplicar roles a los hosts de subred1
+  hosts: subred1
+  become: true
+  roles:
+    - alternativo

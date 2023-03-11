@@ -1,0 +1,12 @@
+---
+
+- hosts: all
+  become: true
+  tasks:
+
+  - name: install kubernetes package
+    apt:
+      name:
+        - kubernetes
+      state: latest
+      update_cache: yes
