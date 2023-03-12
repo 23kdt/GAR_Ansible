@@ -1,0 +1,15 @@
+---
+- name: Borrar usuario Diego
+  hosts: subred1
+  become: true
+  tasks:
+    - name: Borrar usuario Diego
+      user:
+        name: Diego
+        state: absent
+
+    - name: Borrar directorio del usuario Diego
+      file:
+        path: "/home/Diego"
+        state: absent
+        force: yes

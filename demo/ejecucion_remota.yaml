@@ -1,0 +1,13 @@
+---
+- name: Ejecutar comando Bash en el host remoto
+  hosts: subred1
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Ejecutar comando Bash
+      shell: ls -l /home
+      register: output
+
+    - name: Imprimir salida
+      debug:
+        var: output.stdout_lines

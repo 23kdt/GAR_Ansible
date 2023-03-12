@@ -1,0 +1,11 @@
+---
+- name: Crear usuario Diego
+  hosts: subred1
+  become: true
+  tasks:
+    - name: Crear usuario Diego
+      user:
+        name: Diego
+        comment: "Diego Dorado"
+        password: "{{ 'prueba' | password_hash('sha512') }}"
+        state: present
