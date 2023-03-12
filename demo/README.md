@@ -23,5 +23,14 @@ Repositorio trabajo teórico Gestión y Administración de Red
 
 - **ejemplo_avanzado.yaml**: ejemplo de un playbook "real", distinguiendo tareas en función del grupo de hosts. 
 
+## EJEMPLOS EXTRA
+Distintos archivos yaml para mostrar algunas utilidades básicas de Ansible por si me diese tiempo a exponerlo en clase. Estas utilidades son el uso del parámetro state y el uso de la shell del host remoto.
+
+- **crear_usuario.yaml**: muestra cómo crear un usuario en un host remoto.
+
+- **borrar_usuario.yaml**: borra el usuario creado y su directorio propio de /home
+
+- **ejecucion_remota.yaml**: muestra el uso de la shell del host remoto.
+
 ## Carpeta /roles
 Carpeta donde almaceno los ficheros respectivos de los roles "default" y "alternativo".
