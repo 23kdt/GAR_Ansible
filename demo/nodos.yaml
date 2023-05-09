@@ -1,0 +1,11 @@
+- ip_address: 112.19.179.233
+  mac_address: 00:0c:29:94:b7:28
+  node_role: wes
+- ip_address: 112.19.179.234
+  mac_address: 10:0c:29:50:68:45
+  node_role: dv
+- ip_address: 22.19.179.234
+  mac_address: 10:0c:29:50:68:45
+  node_role: dx
+
+

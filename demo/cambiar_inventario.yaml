@@ -1,0 +1,17 @@
+---
+- name: Crear inventario desde archivo nodos.yaml
+  hosts: localhost
+  gather_facts: no
+
+  tasks:
+    - name: Leer archivo nodos.yaml
+      include_vars:
+        file: nodos.yaml
+        name: nodos
+
+    - name: Crear archivo de inventario
+      lineinfile:
+        path: inventario
+        line: "[{{ item.node_role }}]\n {{ item.ip_address }} ansible_mac_address={{ item.mac_address }} "
+      loop: "{{ nodos['nodos'] }}"
+
