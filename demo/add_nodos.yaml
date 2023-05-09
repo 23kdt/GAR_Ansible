@@ -51,3 +51,10 @@
       delegate_to: localhost
       loop: "{{ nodos }}"
 
+- name: SSH
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Asociar claves SSH
+      command: ./sh_ssh_nodos.sh
+      delegate_to: localhost

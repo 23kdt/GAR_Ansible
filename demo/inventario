@@ -1,14 +1,7 @@
 
-[weds]
-322.19.179.233 ansible_mac_address=00:0c:29:94:b7:28
 
-[dv]
-112.19.179.234 ansible_mac_address=10:0c:29:50:68:45
+[webserver]
+192.168.1.134 ansible_mac_address=00:0c:29:94:b7:28
 
-[dx]
-22.19.179.234 ansible_mac_address=10:0c:29:50:68:45
-122.19.179.234 ansible_mac_address=10:0c:29:50:68:45
-
-[wes]
-112.19.179.233 ansible_mac_address=00:0c:29:94:b7:28
-322.19.179.233 ansible_mac_address=00:0c:29:94:b7:28
+[db]
+192.168.1.106 ansible_mac_address=00:0c:29:50:68:45
