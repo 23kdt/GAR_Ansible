@@ -31,8 +31,8 @@
 - name: Configurar y enviar notificaciones
   hosts: nuevos
   vars:
-    bot_token : 6028876660:AAHjrUW54EgEREZ04zXRzYSW1H-4dnskMaA
-    chat_id: 1483510081
+    bot_token : 6028876660:AAHjrUW54EgEREZ04zXRzYSW1H-4dnskMaA   //Este bot está borrado por motivos de seguridad
+    chat_id: 0123456789                                          //Este id no es el usado por mi en la práctica
   tasks:
     - name: Personalizar mensaje
       set_fact:
