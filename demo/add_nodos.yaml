@@ -51,10 +51,51 @@
       delegate_to: localhost
       loop: "{{ nodos }}"
 
+
 - name: SSH
   hosts: localhost
   gather_facts: false
   tasks:
     - name: Asociar claves SSH
-      command: ./sh_ssh_nodos.sh
+      script: sh_ssh_nodos.sh
       delegate_to: localhost
+
+
+
+- name: Añadir nuevos nodos al host_group nuevos
+  hosts: localhost
+  gather_facts: false
+  vars:
+    inventory_file: "inventario"
+  tasks:
+    - name: Leer archivo de nodos
+      set_fact:
+        nodos: "{{ lookup('file', 'nodos.yaml') | from_yaml }}"
+        wantlist: True
+      no_log: true
+
+    - name: Añadir host al inventario
+      add_host:
+        name: "{{ item.ip_address }}"
+        ansible_host: "{{ item.ip_address }}"
+        mac_address: "{{ item.mac_address }}"
+        node_role: "{{ item.node_role }}"
+      delegate_to: localhost
+      loop: "{{ nodos }}"
+   
+    - name: Crear host_group nuevos
+      lineinfile:
+        path: "{{ inventory_file }}"
+        line: "\n[nuevos]\n"
+        insertafter: EOF
+      delegate_to: localhost
+
+
+    - name: Añadir nodos al host_group nuevos
+      lineinfile:
+        path: "{{ inventory_file }}"
+        line: "{{ item.ip_address }} ansible_mac_address={{ item.mac_address }} node_role={{ item.node_role }}"
+        insertafter: "[nuevos]"
+        state: present
+      delegate_to: localhost
+      loop: "{{ nodos }}"

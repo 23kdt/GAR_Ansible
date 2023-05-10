@@ -1,0 +1,54 @@
+- name: Configurar nodos en funcion del rol
+  hosts: nuevos
+  become: true
+  pre_tasks:
+
+  - name: install updates (Ubuntu)
+    apt:
+      update_cache: yes
+
+
+- hosts: nuevos
+  become: true
+  tasks:
+
+  - name: Configurar nodos con rol db
+    apt:
+      name:
+        - mariadb-server
+        - mariadb-client
+      state: latest
+    when: node_role == "db"
+
+  - name: Configurar nodos con rol webservice
+    apt:
+      name:
+        - nginx
+      state: latest
+    when: node_role == "webserver"
+
+
+- name: Configurar y enviar notificaciones
+  hosts: nuevos
+  vars:
+    bot_token : 6028876660:AAHjrUW54EgEREZ04zXRzYSW1H-4dnskMaA
+    chat_id: 1483510081
+  tasks:
+    - name: Personalizar mensaje
+      set_fact:
+        message: "Se ha creado el nodo {{ inventory_hostname }} con MAC {{ ansible_mac_address }} y rol {{ hostvars[inventory_hostname]['node_role'] }}. Se ha configurado correctamente"
+    - name: Enviar mensaje
+      uri:
+        url: "https://api.telegram.org/bot{{ bot_token }}/sendMessage"
+        method: POST
+        body_format: form-urlencoded
+        body:
+          chat_id: "{{ chat_id }}"
+          text: "{{ message }}"
+        status_code: 200
+      register: result
+    - name: Comprobar respuesta
+      assert:
+        that:
+          - result.status == 200
+
