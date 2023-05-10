@@ -1,0 +1,367 @@
+En primer lugar, he tenido que crear algunos playbooks para crear el inventario, o para modificarlo, bien de forma individual o pasandole un archivo "nodos.yaml" que añade los nodos al host_group en función de su atributo "node_role", teniendo en cuenta que un host puede pertenecer a distintos host_groups y que un host no puede estar dos veces en un host_group. 
+
+## Crear inventario desde cero
+
+```
+---
+- name: Crear inventario desde archivo nodos.yaml
+  hosts: localhost
+  gather_facts: no
+
+  tasks:
+    - name: Leer archivo nodos.yaml
+      include_vars:
+        file: nodos.yaml
+        name: nodos
+
+    - name: Crear archivo de inventario
+      lineinfile:
+        path: inventario
+        line: "[{{ item.node_role }}]\n {{ item.ip_address }} ansible_mac_address={{ item.mac_address }} "
+      loop: "{{ nodos['nodos'] }}"
+
+```
+
+Este código, toma como referencia el archivo "nodos.yaml" y convierte el inventario en las entradas que tiene dicho archivo.
+
+## Añadir nodos al inventario
+Si queremos añadir nodos, pero sin eliminar el contenido del inventario (ya que eliminaría el resto de hosts asociados), puede ser de utilidad el siguiente código. Hay que tener en cuenta que un host puede pertenecer a distintos host_groups, por lo que tanto la IP y la MAC pueden estar repetidas en varios host_groups, pero no puede haber dos host iguales en un mismo host_group, ya que estaría duplicado. 
+La lógica de este playbook es algo más compleja:
+
+
+También he creado un script para añadir un único nodo pasando los datos por parámetro, pero no es un método escalable ni automático, por lo que solo es recomendable para pruebas:
+
+```
+- name: Añadir host al inventario
+  hosts: localhost
+  gather_facts: false
+  vars:
+    mac_address: "{{ lookup('env', 'mac_address') }}"
+    ip_address: "{{ lookup('env', 'ip_address') }}"
+    node_role: "{{ lookup('env', 'node_role') }}"
+    inventory_file: "inventario"
+  tasks:
+    - name: Añadir host al inventario
+      add_host:
+        name: "{{ ip_address }}"
+        ansible_host: "{{ ip_address }}"
+        mac_address: "{{ mac_address }}"
+        node_role: "{{ node_role }}"
+      delegate_to: localhost
+
+    - name: Validar si existe el grupo en el archivo de inventario
+      shell: grep -q "\[{{ node_role }}\]" {{ inventory_file }}
+      ignore_errors: true
+      changed_when: false
+      failed_when: false
+      register: group_exist
+
+    - name: Establecer group_exist en caso de que grep falle
+      set_fact:
+        group_exist: "{{ {'rc': 1} if group_exist is failed else group_exist }}"
+
+
+    - name: Añadir entrada de host al archivo de inventario si no existe el grupo
+      lineinfile:
+        path: "{{ inventory_file }}"
+        line: "\n[{{node_role}}]\n{{ ip_address }} ansible_mac_address={{ mac_address }}"
+        insertafter: EOF
+      when: group_exist.rc != 0
+      delegate_to: localhost
+
+    - name: Añadir entrada de host al archivo de inventario si existe el grupo
+      lineinfile:
+        path: "{{ inventory_file }}"
+        line: "{{ ip_address }} ansible_mac_address={{ mac_address }}"
+        insertafter: "\\[{{ node_role }}\\]"
+        state: present
+      when: group_exist.rc == 0
+      delegate_to: localhost
+
+```
+
+
+
+---
+
+
+Una vez hecho esto, deberemos configurar los certificados ssh para poder ejecutar los nodos remotos desde el nodo de control.
+
+Crearemos un script en bash para copiar las claves ssh en todos los hosts remotos:
+
+```
+#!/bin/bash
+
+# Variables
+ssh_key_file="/home/kdt23/.ssh/ansible.pub"
+inventory_file="inventario"
+
+# Iterar sobre las direcciones IP del archivo inventario
+grep -Eo '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' $inventory_file | while read ip_address; do
+  # Ejecutar ssh-copy-id
+  output=$(sshpass -f /home/kdt23/.password.txt ssh-copy-id -i $ssh_key_file $ip_address 2>&1) # Redireccionar stderr a stdout
+  if echo "$output" | grep -q "WARNING: All keys were skipped"; then
+    echo "La clave ya existe en $ip_address, se omite"
+  else
+    echo "La clave se ha añadido correctamente en $ip_address"
+  fi
+done
+
+
+```
+
+Brevemente, explico este código:
+
+Almacenamos como variables las rutas al archivo dónde almacenamos las claves ssh y la ruta dónde almacenamos el inventario con todos los hosts asociados.
+A continuación, mediante el comando grep, iteramos sobre todas las líneas del inventario y sobre cada IP realizamos el comando ``sshpass -f /home/kdt23/.password.txt ssh-copy-id -i $ssh_key_file $ip_address``. Este comando lo que hace es pasar la clave ssh a los nodos remotos (mediante ssh-copy-id) y mediante ``sshpass -f`` lo que indicamos será las claves de dichos nodos remotos, para evitar que nos pregunte por ellas y automatizar el proceso. Además, redirigimos la señal a la salida estándar con el fin de capturar excepciones (en caso de que el host remoto ya tenga la clave púbica en su carpeta **authorized_keys**).  
+
+Este fichero deberá ejecutarse desde el nodo de control para que se aplique sobre el resto de nodos. Para ello, podemos hacer uso del parámetro **script** o **command** en las tareas de los playbook. 
+Para ello, hemos creado otro play dentro del playbook anterior de añadir nodos:
+
+## Add_nodos.yaml
+
+```
+#Archivo add_nodos.yaml
+
+- name: Añadir host al inventario
+  hosts: localhost
+  gather_facts: false
+  vars:
+    inventory_file: "inventario"
+  tasks:
+    - name: Leer archivo de nodos
+      set_fact:
+        nodos: "{{ lookup('file', 'nodos.yaml') | from_yaml }}"
+        wantlist: True
+      no_log: true
+
+    - name: Añadir host al inventario
+      add_host:
+        name: "{{ item.ip_address }}"
+        ansible_host: "{{ item.ip_address }}"
+        mac_address: "{{ item.mac_address }}"
+        node_role: "{{ item.node_role }}"
+      delegate_to: localhost
+      loop: "{{ nodos }}"
+
+    - name: Validar si existe el grupo en el archivo de inventario
+      shell: grep -q "\[{{ item.node_role }}\]" {{ inventory_file }}
+      ignore_errors: true
+      changed_when: false
+      failed_when: false
+      register: group_exist
+      loop: "{{ nodos }}"
+
+    - name: Establecer group_exist en caso de que grep falle
+      set_fact:
+        group_exist: "{{ {'rc': 1} if group_exist is failed else group_exist }}"
+      loop: "{{ nodos }}"
+
+    - name: Añadir entrada de host al archivo de inventario si no existe el grupo
+      lineinfile:
+        path: "{{ inventory_file }}"
+        line: "\n[{{item.node_role}}]\n{{ item.ip_address }} ansible_mac_address={{ item.mac_address }}"
+        insertafter: EOF
+      when: item in group_exist.results | selectattr('rc','eq', 1) | map(attribute='item') | list
+      delegate_to: localhost
+      loop: "{{ nodos }}"
+
+    - name: Añadir entrada de host al archivo de inventario si existe el grupo
+      lineinfile:
+        path: "{{ inventory_file }}"
+        line: "{{ item.ip_address }} ansible_mac_address={{ item.mac_address }}"
+        insertafter: "\\[{{ item.node_role }}\\]"
+        state: present
+      when: item in group_exist.results | selectattr('rc','eq', 0) | map(attribute='item') | list
+      delegate_to: localhost
+      loop: "{{ nodos }}"
+
+
+- name: SSH
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Asociar claves SSH
+      script: sh_ssh_nodos.sh
+      delegate_to: localhost
+
+
+
+- name: Añadir nuevos nodos al host_group nuevos
+  hosts: localhost
+  gather_facts: false
+  vars:
+    inventory_file: "inventario"
+  tasks:
+    - name: Leer archivo de nodos
+      set_fact:
+        nodos: "{{ lookup('file', 'nodos.yaml') | from_yaml }}"
+        wantlist: True
+      no_log: true
+
+    - name: Añadir host al inventario
+      add_host:
+        name: "{{ item.ip_address }}"
+        ansible_host: "{{ item.ip_address }}"
+        mac_address: "{{ item.mac_address }}"
+        node_role: "{{ item.node_role }}"
+      delegate_to: localhost
+      loop: "{{ nodos }}"
+   
+    - name: Crear host_group nuevos
+      lineinfile:
+        path: "{{ inventory_file }}"
+        line: "\n[nuevos]\n"
+        insertafter: EOF
+      delegate_to: localhost
+
+
+    - name: Añadir nodos al host_group nuevos
+      lineinfile:
+        path: "{{ inventory_file }}"
+        line: "{{ item.ip_address }} ansible_mac_address={{ item.mac_address }} node_role={{ item.node_role }}"
+        insertafter: "[nuevos]"
+        state: present
+      delegate_to: localhost
+      loop: "{{ nodos }}"
+
+```
+
+
+
+Vamos a explicar brevemente este codigo:
+
+En primer lugar, creamos un play que se encargará de añadir los nuevos nodos al archivo de inventario, para evitar manejarlo directamente y evitar posibles errores que pueden ocurrir al hacerlo manualmente en entornos algo más avanzados o con gran cantidad de nodos. Para ello, tomará como referencia el archivo "nodos.yaml", un manifiesto donde indicamos los nodos que queremos crear, así como su IP, MAC y rol.
+Mediante la primera tarea, crearemos una lista de nodos a partir del archivo anterior, para después añadirlo al inventario de memoria (que no el archivo como tal) mediante el uso de bucles sobre la lista creada anteriormente. 
+Es importante matizar que en un inventario, un host puede pertenecer a varios grupos, ya que puede ocuparse de distintas funcionalidades distintas, por lo que no podemos únicamente reemplazar la entrada anterior por una nueva. Además, tampoco podemos crear una entrada para cada node_role de los nodos a añadir, ya que seguramente dichas entradas de host_group ya tengan algún host asociado y no tendría sentido tener varios host_group que se refieran al mismo rol. 
+Por ello, debemos utilizar el comando grep para ver si el node_role (que nos servirá como identificador del grupo para simplificar la práctica) ya existe dentro del archivo de inventario. El resultado se almacenará en el diccionario group_exist. También debemos crear una tarea por si acaso no el grupo no existiera, poniendo el valor de la variable rc del diccionario a 1. 
+
+Las siguientes tareas se encargarán de comprobar si el valor de rc es 1 o 0 para cada item de la lista de nodos, para así únicamente añadir aquel nodo que cumpla con dicha variable, y no todos los nodos. 
+En estas tareas también se escribirá en el archivo de inventario, teniendo en cuenta si se tiene que añadir una entrada nueva para el host_group o únicamente añadirlo a este en caso de que ya exista. 
+
+La tarea "SSH":
+```
+- name: SSH
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Asociar claves SSH
+      script: sh_ssh_nodos.sh
+      delegate_to: localhost
+```
+
+Se encarga de ejecutar el script mostrado anteriormente. 
+
+Por último, en este playbook nos encontramos con el play "Añadir nuevos nodos al host_group nuevos":
+
+```
+- name: Añadir nuevos nodos al host_group nuevos
+  hosts: localhost
+  gather_facts: false
+  vars:
+    inventory_file: "inventario"
+  tasks:
+    - name: Leer archivo de nodos
+      set_fact:
+        nodos: "{{ lookup('file', 'nodos.yaml') | from_yaml }}"
+        wantlist: True
+      no_log: true
+
+    - name: Añadir host al inventario
+      add_host:
+        name: "{{ item.ip_address }}"
+        ansible_host: "{{ item.ip_address }}"
+        mac_address: "{{ item.mac_address }}"
+        node_role: "{{ item.node_role }}"
+      delegate_to: localhost
+      loop: "{{ nodos }}"
+   
+    - name: Crear host_group nuevos
+      lineinfile:
+        path: "{{ inventory_file }}"
+        line: "\n[nuevos]\n"
+        insertafter: EOF
+      delegate_to: localhost
+
+
+    - name: Añadir nodos al host_group nuevos
+      lineinfile:
+        path: "{{ inventory_file }}"
+        line: "{{ item.ip_address }} ansible_mac_address={{ item.mac_address }} node_role={{ item.node_role }}"
+        insertafter: "[nuevos]"
+        state: present
+      delegate_to: localhost
+      loop: "{{ nodos }}"
+
+```
+
+La funcionalidad es similar al primer play mencionado, pero aquí añadirá indistintamente todos los nodos al host_group "nuevos", con el que trabajaremos para que los nodos recién añadidos envíen las notificaciones.
+
+## notify.yaml
+
+```
+- name: Configurar nodos en funcion del rol
+  hosts: nuevos
+  become: true
+  pre_tasks:
+
+  - name: install updates (Ubuntu)
+    apt:
+      update_cache: yes
+
+
+- hosts: nuevos
+  become: true
+  tasks:
+
+  - name: Configurar nodos con rol db
+    apt:
+      name:
+        - mariadb-server
+        - mariadb-client
+      state: latest
+    when: node_role == "db"
+
+  - name: Configurar nodos con rol webservice
+    apt:
+      name:
+        - nginx
+      state: latest
+    when: node_role == "webserver"
+
+
+- name: Configurar y enviar notificaciones
+  hosts: nuevos
+  vars:
+    bot_token : 6028876660:AAHjrUW54EgEREZ04zXRzYSW1H-4dnskMaA
+    chat_id: xxxxxxxxxx
+  tasks:
+    - name: Personalizar mensaje
+      set_fact:
+        message: "Se ha creado el nodo {{ inventory_hostname }} con MAC {{ ansible_mac_address }} y rol {{ hostvars[inventory_hostname]['node_role'] }}. Se ha configurado correctamente"
+    - name: Enviar mensaje
+      uri:
+        url: "https://api.telegram.org/bot{{ bot_token }}/sendMessage"
+        method: POST
+        body_format: form-urlencoded
+        body:
+          chat_id: "{{ chat_id }}"
+          text: "{{ message }}"
+        status_code: 200
+      register: result
+    - name: Comprobar respuesta
+      assert:
+        that:
+          - result.status == 200
+
+```
+
+Este playbook se encargará de la funcionalidad propia de esta práctica: el envío de notificaciones por parte de los nuevos nodos. 
+Para ello, he creado un playbook simple que simule un "entorno real". En primer lugar se realizan una serie de pre-task, como puede hacer un apt-get update para asegurarnos de que nuestros nodos están actualizados. 
+Después, podemos instalar una serie de paquetes dependiendo del rol que cada nodo tiene asignado. En este ejemplo, para los nodos con rol de base de datos (db) se instalará MariaDB y para los que tengan un rol de servidor web se instalará nginx. 
+Con esto, podemos damos por configurados nuestros nodos, por lo que ahora deberán de notificar al resto que ya están disponibles y correctamente configurados. 
+El play "Configurar y enviar notificaciones" se encarga de esto. Básicamente, a todos los nodos que pertenezcan al hostgroup **nuevos**, es decir, aquellos que acabamos de añadir, se les pasará el comando curl para que lo lancen ellos mismos, indicando su IP, MAC y rol.
+
+Para las notificaciones he creado un bot mediante BotFather, llamado Ansible_GAR_bot, al que los usuarios deberán estar suscritos. En este chatbot es dónde aparecerán las notificaciones o mensajes enviados por los nuevos nodos:
+
+![Captura](https://github.com/23kdt/GAR_Ansible/blob/main/Captura%20de%20pantalla%202023-05-10%20162836.png)
