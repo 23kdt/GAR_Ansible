@@ -7,6 +7,25 @@ Repositorio trabajo teórico Gestión y Administración de Red
 
 - **inventario**: listado de nodos o host asociados
 
+
+# SEGUNDA ENTREGA
+
+Para este trabajo haré uso de los siguientes archivos:
+
+- **nodos.yaml**: manifiesto en el que definimos los nuevos nodos a añadir en el inventario, definiendo su IP, MAC y el node_role que queremos que se les aplique. En esta ocasión, el node_role y el host group será el mismo con el fin de simplificar la tarea, a la vez de ser lo más parecido a las prácticas en entornos reales.
+ 
+- **sh_ssh_nodos.sh**: script encargado de leer las IPs del archivo de inventario y ejecutar el ssh-copy-id para pasar las claves públicas a los distintos nodos remotos. Hago uso también de sshpass, que con el parámetro -f <fichero>, pasa directamente la clave para evitar que nos pida la clave de root de dichos nodos remotos. Esto funciona ya que ambos nodos tienen la misma clave. Si se desea probar, se debería cambiar la ruta del archivo password.txt. 
+
+- **cambiar_inventario.yaml**: playbook que se encarga de sobreescribir el archivo de inventario con los nuevos nodos definidos en el archivo nodos.yaml. No lo he utilizado durante la demostración, pero puede ser útil si queremos crear un inventario desde 0 o borrar todos los nodos anteriores.
+
+- **add_nodos.yaml**: es el playbook encargado de añadir los nuevos nodos al archivo de inventario a partir de un manifiesto yaml que indique los nodos que queremos añadir. Añade y no reescribe, por lo que puede ser útil para entornos reales dónde se tenga que añadir nuevos nodos sin eliminar los anteriores y evitar hacerlo uno por uno o directamente en el inventario, pudiendo evitar así posibles errores. A su vez, también se encarga de ejecutar el script sh_ssh_nodos.sh que pasa los certificados ssh a los nodos remotos. Crea también un host_group llamado nuevos, con los que trabajaremos para pasar las notificaciones.
+  
+- **notify.yaml** playbook que se encarga de simular las instalaciones propias de cada rol, así como de pasar el comando curl que deben ejecutar los nodos remotos para crear la notificación de Telegram.
+
+---
+  
+# PRIMERA ENTREGA
+
 ## Ejemplos de archivos YAML
 
 - **install_kubernetes.yml / uninstall_kubernetes.yml** : ejemplos de playbook para mostrar la sincronización de los nodos con el maestro y el uso de apt 
